@@ -68,17 +68,15 @@ class Compiler:
     def rco_stmt(self, s: stmt) -> List[stmt]:
 
         match s:
-            case Expr(Assign(Name(var), exp)):
+            case Assign([Name(var)], exp):
                 expression, temps = self.rco_exp(exp, False)
-                return [self.temps_helper(name, xpr) for name,xpr in temps] + [expr(Assign(Name(var), expression))]
+                return [self.temps_helper(name, xpr) for name,xpr in temps] + [Assign([Name(var)], expression)]
             case Expr(Call(Name('print'), [exp])):
                 atomic_exp, temps = self.rco_exp(exp, True)
                 return [self.temps_helper(name,xpr) for name,xpr in temps] + [Expr(Call(Name('print'), [atomic_exp]))]
             case Expr(exp):
                 atomic_exp, temps = self.rco_exp(exp, True)
                 return [self.temps_helper(name,xpr) for name,xpr in temps] + [atomic_exp]
-
-                # return [self.rco_exp(exp, True)]
         raise Exception('rco_stmt error')
 
     def remove_complex_operands(self, p: Module) -> Module:
@@ -98,15 +96,54 @@ class Compiler:
 
     def select_arg(self, e: expr) -> arg:
         # YOUR CODE HERE
-        pass        
+        match e:
+            case Constant(n):
+                print('Constant case, value is ', n)
+                return Immediate(n)
+            case Name(var):
+                print('Variable case, value is ', var)
+                return Variable(var)
+            case _:
+                raise Exception('todo: handle non basic type?')
+
+    def assign_instruction_to_variable(self, e: expr, v: str) -> List[instr]:
+        match e:
+            case BinOp(left_exp, Add(), right_exp):
+                _left = self.select_arg(left_exp)
+                _right = self.select_arg(right_exp)
+                return [
+                    Instr('movq', [_left, Variable(v)]),
+                    Instr('addq', [_right, Variable(v)])
+                ]
+        pass
 
     def select_stmt(self, s: stmt) -> List[instr]:
         # YOUR CODE HERE
-        pass        
+        match s:
+            case Assign([Name(var)], exp):
+                return self.assign_instruction_to_variable(exp, var)
 
-    # def select_instructions(self, p: Module) -> X86Program:
-    #     # YOUR CODE HERE
-    #     pass        
+            case Expr(Call(Name('print'), [exp])):
+                return [
+                    Instr('movq', [self.select_arg(exp), Reg('rdi')]),
+                    Callq(label_name('print_int'), 1)
+                ]
+
+            case Expr(exp):
+                print(f"case 3")
+                pass
+        raise Exception('select_stmt error')    
+
+    def select_instructions(self, p: Module) -> X86Program:
+        # YOUR CODE HERE
+        match p:
+            case Module(body):
+                select_stmts = []
+                for stmt in body:
+                    select_stmts += self.select_stmt(stmt)
+                return X86Program(select_stmts)
+            case _:
+                raise Exception('select_stmts error')
 
     ############################################################################
     # Assign Homes
