@@ -150,8 +150,7 @@ class Compiler:
             case Module(body):
                 select_stmts = []
                 for stmt in body:
-                    bob = self.select_stmt(stmt)
-                    select_stmts += bob
+                    select_stmts += self.select_stmt(stmt)
                 return X86Program(select_stmts)
             case _:
                 raise Exception('select_stmts error')
@@ -162,21 +161,39 @@ class Compiler:
 
     def assign_homes_arg(self, a: arg, home: Dict[Variable, arg]) -> arg:
         # YOUR CODE HERE
-        pass
+        if isinstance(a, Variable):
+            if home.get(a, None) is not None:
+                return home[a]
+            else:
+                new_offset = -(1 + len(home)) * 8 # TODO: explanation
+                home[a] = Deref('rbp', new_offset)
+                return home[a]
+        return a
 
-    def assign_homes_instr(self, i: instr,
-                           home: Dict[Variable, arg]) -> instr:
+    def assign_homes_instr(self, i: instr,home: Dict[Variable, arg]) -> instr:
         # YOUR CODE HERE
-        pass
+        new_args = []
 
-    def assign_homes_instrs(self, ss: List[instr],
-                            home: Dict[Variable, arg]) -> List[instr]:
+        if isinstance(i, Instr):
+            for arg in i.args:
+                new_args += [self.assign_homes_arg(arg, home)]
+            return Instr(i.instr, new_args)
+        return i
+
+    def assign_homes_instrs(self, ss: List[instr], home: Dict[Variable, arg]) -> List[instr]:
         # YOUR CODE HERE
-        pass
+        assigned_instruction_list: List[instr] = []
 
-    # def assign_homes(self, p: X86Program) -> X86Program:
-    #     # YOUR CODE HERE
-    #     pass
+        for instruction in ss:
+            assigned_instruction_list += [self.assign_homes_instr(instruction, home)]
+
+        return assigned_instruction_list
+
+
+
+    def assign_homes(self, p: X86Program) -> X86Program:
+        return X86Program(body=self.assign_homes_instrs(p.body, {}))
+
 
     ############################################################################
     # Patch Instructions
