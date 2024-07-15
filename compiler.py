@@ -180,19 +180,23 @@ class Compiler:
             return Instr(i.instr, new_args)
         return i
 
-    def assign_homes_instrs(self, ss: List[instr], home: Dict[Variable, arg]) -> List[instr]:
+    def assign_homes_instrs(self, ss: List[instr], home: Dict[Variable, arg]) -> Tuple[List[instr], int]:
         # YOUR CODE HERE
         assigned_instruction_list: List[instr] = []
 
         for instruction in ss:
             assigned_instruction_list += [self.assign_homes_instr(instruction, home)]
 
-        return assigned_instruction_list
+        stack_size = len(home) * 8
+        stack_size += stack_size % 16
+
+        return assigned_instruction_list, stack_size
 
 
 
     def assign_homes(self, p: X86Program) -> X86Program:
-        return X86Program(body=self.assign_homes_instrs(p.body, {}))
+        assigned_instrs, stack_size = self.assign_homes_instrs(p.body, {})
+        return X86Program(body=assigned_instrs, stack_size=stack_size)
 
 
     ############################################################################

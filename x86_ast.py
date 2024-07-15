@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from utils import dedent, indent, indent_stmt, label_name
+from typing import Optional
 
 
 @dataclass
 class X86Program:
     body: dict[str, list[instr]] | list[instr]
+    stack_size: Optional[int] = None
 
     def __str__(self):
         result = ''
