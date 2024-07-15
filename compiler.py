@@ -3,7 +3,7 @@ from ast import *
 from utils import *
 from x86_ast import *
 import os
-from typing import List, Tuple, Set, Dict
+from typing import List, Tuple, Dict, Optional
 
 Binding = Tuple[Name, expr]
 Temporaries = List[Binding]
@@ -40,28 +40,28 @@ class Compiler:
                 input_var = Name(generate_name('input_int_var'))
                 return input_var, [(input_var, Call(Name('input_int'), []))]
             case UnaryOp(USub(), exp):
-                # -10 -> tmp1, [(tmp1, -10)]
                 atomic, temps = self.rco_exp(exp, True)
                 unary_stub = Name(generate_name('unary_op'))
                 return unary_stub, temps + [(unary_stub, atomic)]
-            
+
             case BinOp(left_exp,Add(), right_exp):
                 left_atomic, left_temps = self.rco_exp(left_exp, True)
                 right_atomic, right_temps = self.rco_exp(right_exp, True)
 
-                add_stub_var = Name(generate_name('binop_plus'))                
+                add_stub_var = Name(generate_name('binop_plus'))
                 new_exp = BinOp(left_atomic, Add(), right_atomic)
 
-                return add_stub_var, left_temps + right_temps +[(add_stub_var, new_exp)]     
+                bob = add_stub_var, left_temps + right_temps +[(add_stub_var, new_exp)]
+                return bob
 
-            case BinOp(left_exp,Sub(), right_exp):
+            case BinOp(left_exp, Sub(), right_exp):
                 left_atomic, left_temps = self.rco_exp(left_exp, True)
                 right_atomic, right_temps = self.rco_exp(right_exp, True)
 
-                sub_stub_var = Name(generate_name('binop_sub'))                
+                sub_stub_var = Name(generate_name('binop_sub'))
                 new_exp = BinOp(left_atomic, Sub(), right_atomic)
 
-                return sub_stub_var, left_temps + right_temps + [(sub_stub_var, new_exp)] 
+                return sub_stub_var, left_temps + right_temps + [(sub_stub_var, new_exp)]
 
         raise Exception('rco_exp error')
 
@@ -76,7 +76,7 @@ class Compiler:
                 return [self.temps_helper(name,xpr) for name,xpr in temps] + [Expr(Call(Name('print'), [atomic_exp]))]
             case Expr(exp):
                 atomic_exp, temps = self.rco_exp(exp, True)
-                return [self.temps_helper(name,xpr) for name,xpr in temps] + [atomic_exp]
+                return [self.temps_helper(name,xpr) for name,xpr in temps]
         raise Exception('rco_stmt error')
 
     def remove_complex_operands(self, p: Module) -> Module:
@@ -88,51 +88,61 @@ class Compiler:
                 return Module(rco_stmts)
             case _:
                 raise Exception('remove_complex_operands error')
-        
+
 
     ############################################################################
     # Select Instructions
     ############################################################################
 
     def select_arg(self, e: expr) -> arg:
-        # YOUR CODE HERE
         match e:
             case Constant(n):
-                print('Constant case, value is ', n)
                 return Immediate(n)
             case Name(var):
-                print('Variable case, value is ', var)
                 return Variable(var)
             case _:
-                raise Exception('todo: handle non basic type?')
+                raise Exception('TODO: handle non basic type?')
 
-    def assign_instruction_to_variable(self, e: expr, v: str) -> List[instr]:
+    def assign_instruction(self, e: expr, v: Optional[str] = None) -> List[instr]:
         match e:
             case BinOp(left_exp, Add(), right_exp):
-                _left = self.select_arg(left_exp)
-                _right = self.select_arg(right_exp)
                 return [
-                    Instr('movq', [_left, Variable(v)]),
-                    Instr('addq', [_right, Variable(v)])
+                    Instr('movq', [self.select_arg(left_exp), Variable(v) if v else Reg('rax')]),
+                    Instr('addq', [self.select_arg(right_exp), Variable(v) if v else Reg('rax')])
                 ]
-        pass
+            case BinOp(left_exp, Sub(), right_exp):
+                return [
+                    Instr('movq', [self.select_arg(left_exp), Variable(v) if v else Reg('rax')]),
+                    Instr('subq', [self.select_arg(right_exp), Variable(v) if v else Reg('rax')])
+                ]
+            case UnaryOp(USub(), exp):
+                return [Instr('negq', [self.select_arg(exp), Variable(v) if v else Reg('rax')])]
+            case Call(Name('input_int'), []):
+                # TODO: fix this, doesn't really make sense the optional V doesn't really make sense to me
+                return [Callq(label_name('read_int'),0), Instr('movq', [Reg('rax'), Variable(v) if v else Reg('rax')])]
+            case Constant(n):
+                return [Instr('movq', [Immediate(n), Variable(v) if v else Reg('rax')])]
+            case Name(n):
+                return [Instr('movq', [Variable(n), Variable(v) if v else Reg('rax')])]
+        return []
 
     def select_stmt(self, s: stmt) -> List[instr]:
-        # YOUR CODE HERE
         match s:
             case Assign([Name(var)], exp):
-                return self.assign_instruction_to_variable(exp, var)
-
-            case Expr(Call(Name('print'), [exp])):
+                return self.assign_instruction(exp, var)
+            case Expr(Call(Name('print'), [Name(var)])):
                 return [
-                    Instr('movq', [self.select_arg(exp), Reg('rdi')]),
+                    Instr('movq', [Variable(var), Reg('rdi')]),
                     Callq(label_name('print_int'), 1)
                 ]
-
+            case Expr(Call(Name('print'), [Constant(n)])):
+                return [
+                    Instr('movq', [Immediate(n), Reg('rdi')]),
+                    Callq(label_name('print_int'), 1)
+                ]
             case Expr(exp):
-                print(f"case 3")
-                pass
-        raise Exception('select_stmt error')    
+                return self.assign_instruction(exp)
+        raise Exception('select_stmt error')
 
     def select_instructions(self, p: Module) -> X86Program:
         # YOUR CODE HERE
@@ -140,7 +150,8 @@ class Compiler:
             case Module(body):
                 select_stmts = []
                 for stmt in body:
-                    select_stmts += self.select_stmt(stmt)
+                    bob = self.select_stmt(stmt)
+                    select_stmts += bob
                 return X86Program(select_stmts)
             case _:
                 raise Exception('select_stmts error')
@@ -151,21 +162,21 @@ class Compiler:
 
     def assign_homes_arg(self, a: arg, home: Dict[Variable, arg]) -> arg:
         # YOUR CODE HERE
-        pass        
+        pass
 
     def assign_homes_instr(self, i: instr,
                            home: Dict[Variable, arg]) -> instr:
         # YOUR CODE HERE
-        pass        
+        pass
 
     def assign_homes_instrs(self, ss: List[instr],
                             home: Dict[Variable, arg]) -> List[instr]:
         # YOUR CODE HERE
-        pass        
+        pass
 
     # def assign_homes(self, p: X86Program) -> X86Program:
     #     # YOUR CODE HERE
-    #     pass        
+    #     pass
 
     ############################################################################
     # Patch Instructions
@@ -173,15 +184,15 @@ class Compiler:
 
     def patch_instr(self, i: instr) -> List[instr]:
         # YOUR CODE HERE
-        pass        
+        pass
 
     def patch_instrs(self, ss: List[instr]) -> List[instr]:
         # YOUR CODE HERE
-        pass        
+        pass
 
     # def patch_instructions(self, p: X86Program) -> X86Program:
     #     # YOUR CODE HERE
-    #     pass        
+    #     pass
 
     ############################################################################
     # Prelude & Conclusion
@@ -189,5 +200,4 @@ class Compiler:
 
     # def prelude_and_conclusion(self, p: X86Program) -> X86Program:
     #     # YOUR CODE HERE
-    #     pass        
-
+    #     pass
