@@ -193,27 +193,62 @@ class Compiler:
         return assigned_instruction_list, stack_size
 
 
-
     def assign_homes(self, p: X86Program) -> X86Program:
         assigned_instrs, stack_size = self.assign_homes_instrs(p.body, {})
         return X86Program(body=assigned_instrs, stack_size=stack_size)
-
 
     ############################################################################
     # Patch Instructions
     ############################################################################
 
-    def patch_instr(self, i: instr) -> List[instr]:
+
+    def instr_has_multiple_var_refs(self, i: Instr) -> bool:
+        var_ref_counts = 0
+
+        for arg in i.args:
+            match arg:
+                case Immediate(v):
+                    pass
+                case Reg(id):
+                    pass
+                case Deref(reg,v):
+                    var_ref_counts += 1
+
+        return var_ref_counts > 1
+    
+    def patch_instr(self, i: Instr) -> List[instr]:
         # YOUR CODE HERE
-        pass
+        if self.instr_has_multiple_var_refs(i):
+            # return self.expand_instr(i)
+            return [
+                Instr('movq', [ i.source(), Reg('rdx')]),
+                Instr(i.instr, [Reg('rdx'), i.target()])
+            ]
+        else:
+            return [i]
 
     def patch_instrs(self, ss: List[instr]) -> List[instr]:
         # YOUR CODE HERE
-        pass
+        patched_instrs = []
+        for inst in ss:
+            if isinstance(inst, Instr) and inst.instr in ('movq', 'addq', 'subq'):
+                patched_instrs += self.patch_instr(inst)
+            else:
+                patched_instrs.append(inst)
+        return patched_instrs
 
-    # def patch_instructions(self, p: X86Program) -> X86Program:
-    #     # YOUR CODE HERE
-    #     pass
+
+    def patch_instructions(self, p: X86Program) -> X86Program:
+        # YOUR CODE HERE
+        body = p.body
+        stack_size = p.stack_size
+
+        if isinstance(body, Dict):
+            raise Exception('dusty5 :: body type is dict[str, list[instr], throw for now')
+
+        patched_instrs = self.patch_instrs(body)
+        return X86Program(body=patched_instrs, stack_size=stack_size)
+
 
     ############################################################################
     # Prelude & Conclusion
