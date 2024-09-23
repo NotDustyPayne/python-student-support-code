@@ -187,7 +187,7 @@ class Compiler:
         for instruction in ss:
             assigned_instruction_list += [self.assign_homes_instr(instruction, home)]
 
-        stack_size = len(home) * 8
+        stack_size = len(home.keys()) * 8
         stack_size += stack_size % 16
 
         return assigned_instruction_list, stack_size
@@ -254,6 +254,22 @@ class Compiler:
     # Prelude & Conclusion
     ############################################################################
 
-    # def prelude_and_conclusion(self, p: X86Program) -> X86Program:
-    #     # YOUR CODE HERE
-    #     pass
+    def prelude_and_conclusion(self, p: X86Program) -> X86Program:
+        # YOUR CODE HERE
+
+        stack_size = p.stack_size or 0
+
+        prelude = [
+            Instr('pushq', [Reg('rbp')]),
+            Instr('movq', [Reg('rsp'), Reg('rbp')]),
+            Instr('subq', [Immediate(stack_size), Reg('rsp')])
+        ]
+
+        conclusion = [
+            Instr('addq', [Immediate(stack_size), Reg('rsp')]),
+            Instr('popq', [Reg('rbp')]),          
+            Retq()
+        ]
+
+        base_instrs = p.body
+        return X86Program(body = prelude + base_instrs + conclusion, stack_size=p.stack_size)

@@ -91,6 +91,12 @@ class Jump(instr):
 
     def __str__(self):
         return indent_stmt() + 'jmp ' + self.label + '\n'
+    
+@dataclass(frozen=True, eq=False)
+class Retq(instr):
+
+    def __str__(self):
+        return indent_stmt() + 'retq\n'
 
 @dataclass(frozen=True, eq=False)
 class IndirectJump(instr):
